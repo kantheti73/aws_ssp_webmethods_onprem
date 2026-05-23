@@ -1,5 +1,5 @@
 {
-  "_comment": "webMethods API Gateway 10.7+ Identify & Access policy fragment. Apply globally or per-API.",
+  "_comment": "webMethods API Gateway 10.15 Identify & Access policy fragment. Apply globally or per-API.",
   "policyName": "SSP_JWT_Inbound",
   "policyType": "IDENTIFY_ACCESS",
   "policyStage": "Identify & Authorize Application",
