@@ -8,10 +8,13 @@ const app = new cdk.App();
 const sspCtx = app.node.tryGetContext('ssp') as {
   idpIssuer: string;
   idpJwksUri: string;
+  idpTokenUrl: string;
+  idpEdgeClientId: string;
   expectedAudiences: string[];
   onpremNlbDns: string;
   primaryRegion: string;
   secondaryRegion: string;
+  enableTokenExchange: { primary: boolean; secondary: boolean };
 };
 
 const accountFromEnv = process.env.CDK_DEFAULT_ACCOUNT;
@@ -24,6 +27,9 @@ new FederatedApiGwStack(app, 'FederatedApiGw-Primary', {
   idpJwksUri: sspCtx.idpJwksUri,
   expectedAudiences: sspCtx.expectedAudiences,
   onpremNlbDns: sspCtx.onpremNlbDns,
+  enableTokenExchange: sspCtx.enableTokenExchange?.primary ?? false,
+  idpTokenUrl: sspCtx.idpTokenUrl,
+  idpEdgeClientId: sspCtx.idpEdgeClientId,
 });
 
 // Secondary region (DR)
@@ -34,6 +40,9 @@ new FederatedApiGwStack(app, 'FederatedApiGw-Secondary', {
   idpJwksUri: sspCtx.idpJwksUri,
   expectedAudiences: sspCtx.expectedAudiences,
   onpremNlbDns: sspCtx.onpremNlbDns,
+  enableTokenExchange: sspCtx.enableTokenExchange?.secondary ?? false,
+  idpTokenUrl: sspCtx.idpTokenUrl,
+  idpEdgeClientId: sspCtx.idpEdgeClientId,
 });
 
 app.synth();

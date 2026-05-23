@@ -1,0 +1,20 @@
+{
+  "name": "ssp-token-exchange-lambda",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.1",
+    "undici": "^6.18.0",
+    "@aws-sdk/client-secrets-manager": "^3.598.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.130",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

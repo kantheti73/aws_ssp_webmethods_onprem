@@ -11,10 +11,16 @@
     "ssp": {
       "idpIssuer": "https://idp.ssp.example.com",
       "idpJwksUri": "https://idp.ssp.example.com/.well-known/jwks.json",
+      "idpTokenUrl": "https://idp.ssp.example.com/oauth2/token",
+      "idpEdgeClientId": "ssp-edge",
       "expectedAudiences": ["ssp-edge", "onprem-orders-api", "onprem-profile-api"],
       "onpremNlbDns": "wm-apigw-internal.example.com",
       "primaryRegion": "us-east-1",
-      "secondaryRegion": "us-west-2"
+      "secondaryRegion": "us-west-2",
+      "enableTokenExchange": {
+        "primary": true,
+        "secondary": false
+      }
     }
   }
 }

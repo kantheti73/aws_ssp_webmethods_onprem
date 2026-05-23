@@ -10,6 +10,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as path from 'path';
+import { TokenExchange } from './token-exchange-construct';
 
 export interface FederatedApiGwStackProps extends cdk.StackProps {
   isPrimary: boolean;
@@ -17,6 +18,17 @@ export interface FederatedApiGwStackProps extends cdk.StackProps {
   idpJwksUri: string;
   expectedAudiences: string[];
   onpremNlbDns: string;
+  /**
+   * Whether to deploy the Option-2 (RFC 8693 Token Exchange) path:
+   * ElastiCache Redis + Token Exchange Lambda + /onprem-tx/{proxy+} route.
+   * Default true for primary, false for secondary (cost — secondary inherits
+   * from a shared regional Redis when used).
+   */
+  enableTokenExchange?: boolean;
+  /** IdP token endpoint, used only when enableTokenExchange=true */
+  idpTokenUrl?: string;
+  /** Client id of the SSP edge actor in the IdP */
+  idpEdgeClientId?: string;
 }
 
 /**
@@ -175,14 +187,67 @@ export class FederatedApiGwStack extends cdk.Stack {
     );
 
     // ------------------------------------------------------------------
-    // 5. Outputs
+    // 5. (Optional) Option-2 token exchange path: /onprem-tx/{proxy+}
+    // ------------------------------------------------------------------
+    let tokenExchange: TokenExchange | undefined;
+    if (props.enableTokenExchange) {
+      if (!props.idpTokenUrl || !props.idpEdgeClientId) {
+        throw new Error(
+          'enableTokenExchange=true requires idpTokenUrl and idpEdgeClientId',
+        );
+      }
+
+      tokenExchange = new TokenExchange(this, 'TokenExchange', {
+        vpc,
+        wmBaseUrl: `https://${props.onpremNlbDns}`,
+        idpTokenUrl: props.idpTokenUrl,
+        idpClientId: props.idpEdgeClientId,
+        createPlaceholderSecret: true, // dev default; pass existingClientSecret in prod
+      });
+
+      // Per-route mapping: /onprem-tx/{aud}/{scope}/{proxy+}
+      //   - {aud}  → x-target-audience header injected by integration request mapping
+      //   - {scope}→ x-required-scope  header  ”
+      //   - {proxy+}→ forwarded as-is to webMethods (Lambda strips the /onprem-tx prefix)
+      const onpremTx = restApi.root.addResource('onprem-tx');
+      const audSeg   = onpremTx.addResource('{aud}');
+      const scopeSeg = audSeg.addResource('{scope}');
+      const txProxy  = scopeSeg.addResource('{proxy+}');
+
+      const txIntegration = new apigw.LambdaIntegration(tokenExchange.lambda, {
+        proxy: true,
+        requestParameters: {
+          'integration.request.header.x-target-audience': 'method.request.path.aud',
+          'integration.request.header.x-required-scope':  'method.request.path.scope',
+        },
+      });
+
+      txProxy.addMethod('ANY', txIntegration, {
+        authorizer: lambdaAuthorizer,
+        authorizationType: apigw.AuthorizationType.CUSTOM,
+        requestParameters: {
+          'method.request.path.aud':   true,
+          'method.request.path.scope': true,
+          'method.request.path.proxy': true,
+          'method.request.header.Authorization':   true,
+          'method.request.header.traceparent':     false,
+          'method.request.header.Idempotency-Key': false,
+        },
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Outputs
     // ------------------------------------------------------------------
     new cdk.CfnOutput(this, 'HttpApiUrl', { value: httpApi.apiEndpoint });
     new cdk.CfnOutput(this, 'RestApiUrl', { value: restApi.url });
     new cdk.CfnOutput(this, 'VpcLinkId',  { value: vpcLink.vpcLinkId });
-    new cdk.CfnOutput(this, 'Region',     { value: this.region });
+    new cdk.CfnOutput(this, 'StackRegion',{ value: cdk.Stack.of(this).region });
     new cdk.CfnOutput(this, 'RoleHint', {
       value: props.isPrimary ? 'PRIMARY - Route53 weight=100' : 'SECONDARY - Route53 weight=0 until failover',
     });
+    if (tokenExchange) {
+      new cdk.CfnOutput(this, 'TokenExchangeEnabled', { value: 'true' });
+    }
   }
 }

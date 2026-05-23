@@ -14,9 +14,10 @@ aws_ssp_webmethods_onprem/
 ├── docs/                     # Architecture + Mermaid flow charts (render on GitHub)
 ├── infra/cdk/                # AWS CDK (TypeScript) - APIGW, VPC Link, Lambda, multi-region
 ├── services/
-│   ├── authorizer-lambda/    # JWT authorizer for AWS API Gateway (Node.js)
-│   ├── sample-lambda/        # Sample AWS-native API handler
-│   └── ssp-springboot/       # SSP Spring Boot client demonstrating Resilience4j + JWT
+│   ├── authorizer-lambda/        # JWT authorizer for AWS API Gateway (Node.js)
+│   ├── sample-lambda/            # Sample AWS-native API handler
+│   ├── token-exchange-lambda/    # Option-2 RFC 8693 token exchange + Redis cache (Node.js)
+│   └── ssp-springboot/           # SSP Spring Boot client demonstrating Resilience4j + JWT
 ├── webmethods/               # webMethods API Gateway JWT policy + API definition + deploy script
 └── .github/workflows/        # CI: CDK synth, lint, build
 ```
