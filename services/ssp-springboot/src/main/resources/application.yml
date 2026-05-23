@@ -1,0 +1,91 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: ssp-portal
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SSP_IDP_ISSUER:https://idp.ssp.example.com}
+          jwk-set-uri: ${SSP_IDP_JWKS_URI:https://idp.ssp.example.com/.well-known/jwks.json}
+
+ssp:
+  idp:
+    issuer: ${SSP_IDP_ISSUER:https://idp.ssp.example.com}
+    jwks-uri: ${SSP_IDP_JWKS_URI:https://idp.ssp.example.com/.well-known/jwks.json}
+    expected-audience: ${SSP_AUDIENCE:ssp-edge}
+  federated-apigw:
+    base-url: ${FEDERATED_APIGW_BASE_URL:https://api.ssp.example.com}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus, circuitbreakers, retries, bulkheads
+  endpoint:
+    health:
+      show-details: when_authorized
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      onpremOrders:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 50
+        minimumNumberOfCalls: 20
+        failureRateThreshold: 50
+        slowCallRateThreshold: 60
+        slowCallDurationThreshold: 3s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+  retry:
+    instances:
+      onpremOrders:
+        maxAttempts: 3
+        waitDuration: 200ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2.0
+        retryExceptions:
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - org.springframework.web.reactive.function.client.WebClientResponseException$Unauthorized
+          - org.springframework.web.reactive.function.client.WebClientResponseException$Forbidden
+
+  bulkhead:
+    instances:
+      onpremOrders:
+        maxConcurrentCalls: 50
+        maxWaitDuration: 100ms
+
+  thread-pool-bulkhead:
+    instances:
+      onpremOrders:
+        maxThreadPoolSize: 20
+        coreThreadPoolSize: 10
+        queueCapacity: 50
+
+  timelimiter:
+    instances:
+      onpremOrders:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+
+logging:
+  level:
+    root: INFO
+    com.ssp: DEBUG
+    io.github.resilience4j: INFO

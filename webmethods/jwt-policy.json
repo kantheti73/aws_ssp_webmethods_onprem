@@ -1,0 +1,60 @@
+{
+  "_comment": "webMethods API Gateway 10.7+ Identify & Access policy fragment. Apply globally or per-API.",
+  "policyName": "SSP_JWT_Inbound",
+  "policyType": "IDENTIFY_ACCESS",
+  "policyStage": "Identify & Authorize Application",
+  "actions": [
+    {
+      "actionName": "Identify & Authorize Application",
+      "actionType": "IdentifyAuthorize",
+      "parameters": {
+        "identifiers": [
+          {
+            "type": "JWT",
+            "subType": "Bearer",
+            "from": "Authorization_Header",
+            "validate": {
+              "issuer": "https://idp.ssp.example.com",
+              "audience": [
+                "ssp-edge",
+                "onprem-orders-api",
+                "onprem-profile-api"
+              ],
+              "signature": {
+                "mode": "JWKS",
+                "jwksUri": "https://idp.ssp.example.com/.well-known/jwks.json",
+                "cacheMaxAgeSeconds": 3600,
+                "cooldownSeconds": 30,
+                "clockSkewSeconds": 60
+              },
+              "requiredClaims": ["sub", "exp", "iat", "aud", "iss"],
+              "requiredScopesClaim": "scope"
+            }
+          }
+        ],
+        "authorizeApplication": false,
+        "_comment_authorize": "Application identification is informational here; authorization is by scope at the operation level."
+      }
+    }
+  ],
+  "scopeMapping": {
+    "_comment": "Per-operation scope requirement applied via the Authorize User policy on each API method.",
+    "examples": {
+      "GET /orders/{id}": "orders:read",
+      "POST /orders": "orders:write",
+      "GET /profile":   "profile"
+    }
+  },
+  "failureResponse": {
+    "401": {
+      "missingToken": "missing_bearer",
+      "invalidSignature": "invalid_signature",
+      "expired": "expired_token",
+      "audienceMismatch": "invalid_audience",
+      "issuerMismatch": "invalid_issuer"
+    },
+    "403": {
+      "insufficientScope": "insufficient_scope"
+    }
+  }
+}

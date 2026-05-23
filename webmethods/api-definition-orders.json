@@ -1,0 +1,64 @@
+{
+  "apiDefinition": {
+    "apiName": "onprem-orders-api",
+    "apiVersion": "1.0",
+    "apiDescription": "On-prem Orders API exposed via webMethods to the federated edge.",
+    "type": "REST",
+    "protocols": ["HTTPS"],
+    "endpoints": [
+      {
+        "name": "Production",
+        "uri": "https://orders.onprem.example.com",
+        "routingType": "ROUND_ROBIN"
+      }
+    ],
+    "mTls": {
+      "enabled": true,
+      "_comment": "Inbound mTLS — only accept connections from the AWS APIGW VPC Link source cert.",
+      "trustedClientCertSubjects": [
+        "CN=aws-apigw-vpclink, OU=Federation, O=SSP"
+      ]
+    },
+    "policies": {
+      "inbound": [
+        "SSP_JWT_Inbound"
+      ],
+      "operations": [
+        {
+          "path": "/orders/{id}",
+          "method": "GET",
+          "requiredScope": "orders:read",
+          "rateLimit": { "requestsPerMinute": 1200, "burst": 200 }
+        },
+        {
+          "path": "/orders",
+          "method": "POST",
+          "requiredScope": "orders:write",
+          "rateLimit": { "requestsPerMinute": 600, "burst": 100 },
+          "idempotency": {
+            "headerName": "Idempotency-Key",
+            "dedupeWindowHours": 24
+          }
+        }
+      ]
+    },
+    "transformation": {
+      "_comment": "Surface incoming JWT claims as backend headers for audit & multi-tenant routing.",
+      "requestHeaders": {
+        "add": {
+          "X-SSP-Sub":    "${jwt.claims.sub}",
+          "X-SSP-Tenant": "${jwt.claims.tenant}",
+          "X-SSP-Trace":  "${request.headers.traceparent}"
+        }
+      }
+    },
+    "observability": {
+      "metrics": ["latency", "success_count", "failure_count", "throttle_count"],
+      "destinations": [
+        { "type": "ELASTIC", "indexPattern": "wm-apigw-metrics-*" },
+        { "type": "SPLUNK",  "hecToken": "@secret:splunk-hec-token" }
+      ],
+      "traceHeader": "traceparent"
+    }
+  }
+}

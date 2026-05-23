@@ -1,0 +1,62 @@
+name: CDK Synth & Diff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/cdk/**'
+      - 'services/authorizer-lambda/**'
+      - 'services/sample-lambda/**'
+      - '.github/workflows/cdk.yml'
+  pull_request:
+    paths:
+      - 'infra/cdk/**'
+      - 'services/authorizer-lambda/**'
+      - 'services/sample-lambda/**'
+
+permissions:
+  id-token: write   # for OIDC -> AWS
+  contents: read
+  pull-requests: write
+
+jobs:
+  synth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            infra/cdk/package-lock.json
+            services/authorizer-lambda/package-lock.json
+            services/sample-lambda/package-lock.json
+
+      - name: Install authorizer Lambda deps
+        working-directory: services/authorizer-lambda
+        run: npm ci || npm install
+
+      - name: Install sample Lambda deps
+        working-directory: services/sample-lambda
+        run: npm ci || npm install
+
+      - name: Install CDK deps
+        working-directory: infra/cdk
+        run: npm ci || npm install
+
+      - name: TypeScript build (CDK)
+        working-directory: infra/cdk
+        run: npm run build
+
+      - name: CDK synth
+        working-directory: infra/cdk
+        run: npx cdk synth --all
+
+      - name: Upload synth output
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-out
+          path: infra/cdk/cdk.out/
+          retention-days: 14

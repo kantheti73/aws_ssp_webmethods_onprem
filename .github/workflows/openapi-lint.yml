@@ -1,0 +1,40 @@
+name: OpenAPI Lint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'webmethods/**.json'
+      - 'openapi/**'
+  pull_request:
+    paths:
+      - 'webmethods/**.json'
+      - 'openapi/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Spectral
+        run: npm install -g @stoplight/spectral-cli@6
+
+      - name: Lint webMethods JSON (schema sanity)
+        run: |
+          for f in webmethods/*.json; do
+            echo "Validating $f"
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))"
+          done
+
+      - name: Lint OpenAPI specs (if present)
+        run: |
+          if [ -d openapi ]; then
+            spectral lint 'openapi/**/*.yaml' --fail-severity=warn
+          else
+            echo "No openapi/ directory yet — skipping"
+          fi

@@ -1,0 +1,44 @@
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+.npm
+
+# CDK
+cdk.out/
+cdk.context.json
+.cdk.staging/
+
+# TypeScript
+*.tsbuildinfo
+
+# Java / Maven
+target/
+*.class
+.mvn/wrapper/maven-wrapper.jar
+.classpath
+.project
+.settings/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+secrets/
+
+# Build artifacts
+build/
+out/
+*.zip

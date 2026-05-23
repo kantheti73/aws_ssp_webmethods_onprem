@@ -1,0 +1,20 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": ["README.md", "cdk*.json", "**/*.d.ts", "**/*.js", "tsconfig.json", "package*.json", "node_modules"]
+  },
+  "context": {
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "ssp": {
+      "idpIssuer": "https://idp.ssp.example.com",
+      "idpJwksUri": "https://idp.ssp.example.com/.well-known/jwks.json",
+      "expectedAudiences": ["ssp-edge", "onprem-orders-api", "onprem-profile-api"],
+      "onpremNlbDns": "wm-apigw-internal.example.com",
+      "primaryRegion": "us-east-1",
+      "secondaryRegion": "us-west-2"
+    }
+  }
+}
