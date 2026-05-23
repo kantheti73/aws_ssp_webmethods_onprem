@@ -31,6 +31,7 @@ aws_ssp_webmethods_onprem/
 | [03-routing.md](docs/03-routing.md)           | How a request is classified and routed |
 | [04-failover.md](docs/04-failover.md)         | DR / failover state machine |
 | [05-deployment.md](docs/05-deployment.md)     | CI/CD spec → dual-gateway publishing pipeline |
+| [06-network-architecture.md](docs/06-network-architecture.md) | Network architecture with official AWS icons (PNG) + CIDR/SG/port matrix |
 
 ## Quickstart (local development)
 
