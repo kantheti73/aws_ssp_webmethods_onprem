@@ -5,7 +5,7 @@ Two viable patterns for federating OAuth across AWS API Gateway and IBM webMetho
 | | [Option 1 — Pass-through JWT](#option-1--pass-through-jwt-v1-default) | [Option 2 — Token Exchange (RFC 8693)](#option-2--token-exchange-rfc-8693) |
 |---|---|---|
 | Token presented to webMethods | **Same** JWT the user got from the IdP | **Different** JWT minted for the downstream audience |
-| Audience model | Multi-`aud` (`["ssp-edge","onprem-orders-api"]`) | Per-API `aud` (`"onprem-orders-api"` only) |
+| Audience model | Multi-`aud` (`["ssp-edge","onprem-XXX-api"]`) | Per-API `aud` (`"onprem-XXX-api"` only) |
 | Identity on the wire | User identity end-to-end | User identity + actor claim (`act` = SSP edge) |
 | Extra latency | None | One IdP call per exchange (cacheable) |
 | Recommended phase | **v1** | v2 / where security boundaries demand it |
@@ -28,7 +28,7 @@ The simplest federation pattern: the **same** access token the SSP user received
 
 - v1 / greenfield rollout — you want OAuth working end-to-end before optimizing.
 - The downstream service legitimately needs the **user's** identity (not a service identity).
-- You can persuade API teams to register a shared audience like `onprem-orders-api` in the IdP and accept multi-valued `aud`.
+- You can persuade API teams to register a shared audience like `onprem-XXX-api` in the IdP and accept multi-valued `aud`.
 - No regulatory boundary forces token isolation between hops.
 
 ### Sequence
@@ -50,17 +50,17 @@ sequenceDiagram
     SSP->>IdP: /token (code + verifier)
     IdP-->>SSP: access_token (JWT, RS256)
 
-    SSP->>AWS: GET /onprem/orders/123<br/>Authorization: Bearer <JWT>
+    SSP->>AWS: GET /onprem/XXX/123<br/>Authorization: Bearer <JWT>
     AWS->>LA: Invoke authorizer (token, methodArn)
     LA->>IdP: GET /.well-known/jwks.json (cached)
     IdP-->>LA: JWKS
     LA->>LA: Verify sig, iss, aud, exp, scope
     LA-->>AWS: Allow + principalId + context
 
-    AWS->>WM: GET /orders/123 (mTLS)<br/>Authorization: Bearer <JWT><br/>traceparent: 00-...
+    AWS->>WM: GET /XXX/123 (mTLS)<br/>Authorization: Bearer <JWT><br/>traceparent: 00-...
     WM->>WM: JWT policy: validate via JWKS (cached)
     alt JWT valid
-        WM->>BE: GET /orders/123
+        WM->>BE: GET /XXX/123
         BE-->>WM: 200 OK
         WM-->>AWS: 200 OK
         AWS-->>SSP: 200 OK
@@ -76,8 +76,8 @@ sequenceDiagram
 {
   "iss": "https://idp.ssp.example.com",
   "sub": "user-123",
-  "aud": ["ssp-edge", "onprem-orders-api"],
-  "scope": "orders:read orders:write profile",
+  "aud": ["ssp-edge", "onprem-XXX-api"],
+  "scope": "XXX:read XXX:write profile",
   "azp": "ssp-webapp",
   "exp": 1718812800,
   "iat": 1718809200,
@@ -144,24 +144,24 @@ sequenceDiagram
     SSP->>IdP: /token (code + verifier)
     IdP-->>SSP: user_access_token (JWT, aud=ssp-edge)
 
-    SSP->>AWS: GET /onprem/orders/123<br/>Authorization: Bearer <user_token>
+    SSP->>AWS: GET /onprem/XXX/123<br/>Authorization: Bearer <user_token>
     AWS->>LA: Validate user_token
     LA-->>AWS: Allow + context{sub, scopes}
 
-    AWS->>TX: Get downstream token for<br/>(sub=user-123, aud=onprem-orders-api)
-    TX->>Cache: GET (user-123, onprem-orders-api)
+    AWS->>TX: Get downstream token for<br/>(sub=user-123, aud=onprem-XXX-api)
+    TX->>Cache: GET (user-123, onprem-XXX-api)
     alt cache hit & not near expiry
         Cache-->>TX: downstream_token
     else cache miss / near expiry
-        TX->>IdP: POST /token<br/>grant_type=token-exchange<br/>subject_token=user_token<br/>audience=onprem-orders-api<br/>scope=orders:read
-        IdP-->>TX: downstream_token (aud=onprem-orders-api,<br/>act={sub:ssp-edge}, exp=+5min)
-        TX->>Cache: SET (user-123, onprem-orders-api) TTL=240s
+        TX->>IdP: POST /token<br/>grant_type=token-exchange<br/>subject_token=user_token<br/>audience=onprem-XXX-api<br/>scope=XXX:read
+        IdP-->>TX: downstream_token (aud=onprem-XXX-api,<br/>act={sub:ssp-edge}, exp=+5min)
+        TX->>Cache: SET (user-123, onprem-XXX-api) TTL=240s
     end
     TX-->>AWS: downstream_token
 
-    AWS->>WM: GET /orders/123 (mTLS)<br/>Authorization: Bearer <downstream_token>
-    WM->>WM: JWT policy: validate aud=onprem-orders-api,<br/>signature via JWKS
-    WM->>BE: GET /orders/123<br/>X-SSP-Sub: user-123<br/>X-SSP-Actor: ssp-edge
+    AWS->>WM: GET /XXX/123 (mTLS)<br/>Authorization: Bearer <downstream_token>
+    WM->>WM: JWT policy: validate aud=onprem-XXX-api,<br/>signature via JWKS
+    WM->>BE: GET /XXX/123<br/>X-SSP-Sub: user-123<br/>X-SSP-Actor: ssp-edge
     BE-->>WM: 200 OK
     WM-->>AWS: 200 OK
     AWS-->>SSP: 200 OK
@@ -178,8 +178,8 @@ Authorization: Basic <client_credentials of ssp-edge>
 grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 &subject_token=eyJhbGciOiJSUzI1NiIs...   (the user's JWT)
 &subject_token_type=urn:ietf:params:oauth:token-type:access_token
-&audience=onprem-orders-api
-&scope=orders:read
+&audience=onprem-XXX-api
+&scope=XXX:read
 &requested_token_type=urn:ietf:params:oauth:token-type:access_token
 ```
 
@@ -189,8 +189,8 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 {
   "iss": "https://idp.ssp.example.com",
   "sub": "user-123",
-  "aud": "onprem-orders-api",
-  "scope": "orders:read",
+  "aud": "onprem-XXX-api",
+  "scope": "XXX:read",
   "exp": 1718809500,
   "iat": 1718809200,
   "nbf": 1718809200,
@@ -207,7 +207,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 Key differences vs Option 1:
 
 - `aud` is a **single value** — the target API only.
-- `scope` is **narrowed** to what the operation needs (`orders:read`, not the full user grant).
+- `scope` is **narrowed** to what the operation needs (`XXX:read`, not the full user grant).
 - `exp` is **short** (300s typical) — reduces the blast radius of token leak.
 - `act` (RFC 8693 §4.1) records the **actor** (the service that performed the exchange). webMethods and the backend can log/authorize on `act.sub` to differentiate "user via SSP" from "user via partner."
 - Original `sub` is preserved — the call is still **on behalf of** the user.
@@ -239,8 +239,8 @@ Almost no change vs Option 1's `jwt-policy.json`:
 ```diff
    "validate": {
      "issuer": "https://idp.ssp.example.com",
--    "audience": ["ssp-edge", "onprem-orders-api", "onprem-profile-api"],
-+    "audience": ["onprem-orders-api"],   // per-API now; or one policy per audience
+-    "audience": ["ssp-edge", "onprem-XXX-api", "onprem-profile-api"],
++    "audience": ["onprem-XXX-api"],   // per-API now; or one policy per audience
      "signature": { "mode": "JWKS", ... }
    }
 ```
