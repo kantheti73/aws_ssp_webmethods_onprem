@@ -32,7 +32,7 @@ flowchart TB
     subgraph OnPrem["On-Premises"]
         WM1["webMethods APIGW<br/>DC-1 (active)"]
         WM2["webMethods APIGW<br/>DC-2 (active)"]
-        GSLB["F5 GSLB / LTM"]
+        GSLB[" GSLB / LTM"]
         BACK["Downstream services<br/>(REST / SOAP / MQ / DB2)"]
     end
 
