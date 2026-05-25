@@ -17,7 +17,7 @@ flowchart TB
     end
 
     subgraph AWSBackends["AWS-native Backends"]
-        L1["Lambda<br/>(/aws/orders, /aws/notify)"]
+        L1["Lambda<br/>(/aws/citizens, /aws/notify)"]
         ECS["Spring Boot on ECS<br/>(/aws/profile)"]
         S3["S3<br/>(signed URLs)"]
     end
