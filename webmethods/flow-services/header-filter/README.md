@@ -19,17 +19,21 @@ Everything else (`x-amzn-trace-id`, `x-forwarded-*`, `via`, `x-amz-cf-id`, `host
 
 ### Decision table
 
-|  | Option A — Flow + Java service | Option B — APIGW built-in policy (no code) | Option C — Pure Flow inside `invokeISService` |
+|  | Option A — Flow + Java service | Option B — APIGW built-in policy (blocklist only) | Option C — Pure Flow inside `invokeISService` |
 |---|---|---|---|
 | **Effort** | ~30 min | ~5 min | ~10 min |
 | **Runs in** | Any IS Flow context | API Gateway policy pipeline (native) | API Gateway `Invoke IS service` policy |
 | **Code** | Java + Flow | None | Flow only (no Java) |
-| **Allowlist** | Static or dynamic (per-call override) | Static (regex / list in policy UI) | Static (LINKs hardcoded in MAP step) |
+| **Semantics** | Allowlist (configurable) | **Blocklist** — list each unwanted header by name (regex NOT supported; wildcards vary by fix-pack) | Allowlist (LINKs hardcoded) |
+| **Drift risk** | Low (config in code) | **High** — new AWS-injected header next quarter slips through silently | Low (config in Flow) |
 | **Reusable outside APIGW** | **Yes** | No | No |
-| **Where allowlist lives** | `HeaderFilter.java` `DEFAULT_ALLOWED` | API policy config | Flow service MAP step |
-| **Best for** | Protocol mediation, dynamic allowlists, shared IS+APIGW use | Plain proxy/passthrough APIs | Fixed allowlist + you're already using `invokeISService` for other transforms |
+| **Where allowlist lives** | `HeaderFilter.java` `DEFAULT_ALLOWED` | API policy blocklist | Flow service MAP step |
+| **Best for** | Protocol mediation, dynamic allowlists, shared IS+APIGW use | Quick fix to drop *known* unwanted headers | Fixed allowlist + you're already using `invokeISService` |
 
-> **Default recommendation:** If you have no other reason to involve IS, use **Option B**. If you're already inside an `invokeISService` policy for other transformations, use **Option C** and skip the Java step. Reach for **Option A** only when the allowlist must vary per call or the same filter is needed in non-APIGW Flows.
+> **Default recommendation:**
+> - **Option C** if you're already inside `invokeISService` for any transformation — true allowlist, no Java, no drift.
+> - **Option A** if the same filter is needed outside API Gateway, or the allowlist must vary per call.
+> - **Option B** only as a quick blocklist tactical fix; not for long-term allowlist needs.
 
 ---
 
@@ -64,16 +68,45 @@ In Designer's **Service Browser**, run `cleanInboundHeaders` against a service t
 
 ---
 
-### Option B — webMethods API Gateway 10.15 built-in policy (no code)
+### Option B — webMethods API Gateway 10.15 built-in policy (no code, **blocklist only**)
 
-If the filtering is needed **only** at the API Gateway tier (no IS protocol mediation), you don't need any service at all. Use the built-in policy:
+The native **Header Transformation** policy in API Gateway 10.15 takes **literal header names** in its **Remove Headers** action — **not** regex. Anything that looks like an alias reference (`${...}`, `|`, `$`) will fail the policy save with *"not a valid alias syntax"*. So the no-code option here is a **blocklist**, not an allowlist.
+
+> If you need true allowlist semantics in a policy with no IS service involvement, you must write a **Custom Extension** (Groovy/JS) policy — at which point you've left no-code land, and you're better off with Option A or C.
+
+**Configuration:**
 
 1. Open the API in **API Gateway UI** → **Policies** tab.
-2. Add: **Request Processing → Transformation → Header Transformation**.
-3. Action: **Remove headers**.
-4. Match expression: `^(?!authorization$|content-type$|accept$|x-correlation-id$|x-request-id$|soapaction$).*$` (case-insensitive).
-   - Alternatively: switch action to **Keep headers** and list the six explicitly.
-5. Save and activate the API.
+2. Add **Request Processing → Transformation → Header Transformation**.
+3. Action: **Remove Headers**.
+4. List the headers to drop, one per row:
+
+   ```
+   x-amzn-trace-id
+   x-amzn-requestid
+   x-amzn-apigateway-api-id
+   x-amz-cf-id
+   x-amz-cf-pop
+   x-amz-content-sha256
+   x-forwarded-for
+   x-forwarded-port
+   x-forwarded-proto
+   x-forwarded-host
+   x-real-ip
+   via
+   cdn-loop
+   cloudfront-viewer-country
+   cloudfront-forwarded-proto
+   cloudfront-is-mobile-viewer
+   cloudfront-is-desktop-viewer
+   cloudfront-is-tablet-viewer
+   cloudfront-is-smarttv-viewer
+   ```
+
+5. **Some 10.15 fix-packs accept wildcard suffixes** (`x-amzn-*`, `x-amz-*`, `x-forwarded-*`, `cloudfront-*`). Behaviour varies between fix-packs — try wildcards first in your dev tenant; fall back to explicit names if the UI rejects them.
+6. Save and activate the API.
+
+**Caveat:** A blocklist drifts. When AWS adds a new `x-amzn-foo` header in a future API Gateway release, it will reach your backend until someone updates the list. Use Option C (or Option A) if you need this property to be stable over time.
 
 ---
 
