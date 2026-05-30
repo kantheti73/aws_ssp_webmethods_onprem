@@ -15,11 +15,27 @@ Everything else (`x-amzn-trace-id`, `x-forwarded-*`, `via`, `x-amz-cf-id`, `host
 
 ---
 
-## Two ways to deploy this
+## Three ways to deploy this — pick the one that fits
+
+### Decision table
+
+|  | Option A — Flow + Java service | Option B — APIGW built-in policy (no code) | Option C — Pure Flow inside `invokeISService` |
+|---|---|---|---|
+| **Effort** | ~30 min | ~5 min | ~10 min |
+| **Runs in** | Any IS Flow context | API Gateway policy pipeline (native) | API Gateway `Invoke IS service` policy |
+| **Code** | Java + Flow | None | Flow only (no Java) |
+| **Allowlist** | Static or dynamic (per-call override) | Static (regex / list in policy UI) | Static (LINKs hardcoded in MAP step) |
+| **Reusable outside APIGW** | **Yes** | No | No |
+| **Where allowlist lives** | `HeaderFilter.java` `DEFAULT_ALLOWED` | API policy config | Flow service MAP step |
+| **Best for** | Protocol mediation, dynamic allowlists, shared IS+APIGW use | Plain proxy/passthrough APIs | Fixed allowlist + you're already using `invokeISService` for other transforms |
+
+> **Default recommendation:** If you have no other reason to involve IS, use **Option B**. If you're already inside an `invokeISService` policy for other transformations, use **Option C** and skip the Java step. Reach for **Option A** only when the allowlist must vary per call or the same filter is needed in non-APIGW Flows.
+
+---
 
 ### Option A — Flow + Java service (this directory)
 
-Use when you need the filtering inside an IS Flow — typically when webMethods is doing protocol mediation (REST→SOAP, REST→MQ), custom transformations, or anything beyond what an API Gateway policy can express.
+Use when you need the filtering inside an IS Flow — typically when webMethods is doing protocol mediation (REST→SOAP, REST→MQ), the allowlist is dynamic, or the same filter is shared across IS and APIGW contexts.
 
 **Files:**
 
@@ -50,7 +66,7 @@ In Designer's **Service Browser**, run `cleanInboundHeaders` against a service t
 
 ### Option B — webMethods API Gateway 10.15 built-in policy (no code)
 
-If the filtering is needed **only** at the API Gateway tier (no IS protocol mediation), you don't need this service at all. Use the built-in policy:
+If the filtering is needed **only** at the API Gateway tier (no IS protocol mediation), you don't need any service at all. Use the built-in policy:
 
 1. Open the API in **API Gateway UI** → **Policies** tab.
 2. Add: **Request Processing → Transformation → Header Transformation**.
@@ -59,15 +75,24 @@ If the filtering is needed **only** at the API Gateway tier (no IS protocol medi
    - Alternatively: switch action to **Keep headers** and list the six explicitly.
 5. Save and activate the API.
 
-| | Flow service (Option A) | API Gateway policy (Option B) |
-|---|---|---|
-| Effort | ~30 min | ~5 min |
-| Where it runs | IS Flow | API Gateway request pipeline |
-| Visibility in custom transformations | Yes — you can branch / log / mutate | No |
-| Performance | Java call per request (~sub-ms) | Native — fastest |
-| Auditable in API Gateway analytics | Indirect | Yes |
+---
 
-**Recommendation:** Use Option B for plain proxy/passthrough APIs. Use Option A when you also need a Flow service in the path for other reasons.
+### Option C — Pure Flow inside `pub.apigateway.invokeISService` (no Java)
+
+When the service signature matches `pub.apigateway.invokeISService.specifications.RequestSpec`, the inbound headers are already exposed as `request/headers` (a Document with each header name as a child field). You don't need to iterate an IData — you can clear the field and LINK back only the six allowed names.
+
+**File:** [filterRequestHeaders-design.md](filterRequestHeaders-design.md)
+
+The whole service is **4 MAP steps**:
+
+```
+1. COPY request/headers → savedHeaders         (preserve)
+2. SET VALUE request/headers = empty Document  (clear)
+3. LINK savedHeaders/<Name> → request/headers/<Name>   × 6
+4. DROP savedHeaders
+```
+
+Wire it into API Gateway as a **Request Processing → Invoke webMethods IS service** policy. See the design doc for the full Designer walkthrough, the LINK-vs-COPY gotcha, and the header-casing notes.
 
 ---
 
